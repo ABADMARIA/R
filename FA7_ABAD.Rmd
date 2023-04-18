@@ -1,0 +1,60 @@
+# 1a
+a <- 2 
+b <- 12
+x <- 10
+
+scrap <- b - x
+r_total <- b - a
+
+prob <- (scrap/r_total)
+prob
+#probability that memory stick will be scrapped = 0.2
+
+# 1b
+memosticks <- runif(50, min = 2, max = 12)
+hist(memosticks, main="Stick Lengths", xlab ="Length", ylab ="Freq")
+
+simulated_mean <- mean(memosticks)
+simulated_mean
+simulated_var <- var(memosticks)
+simulated_var
+
+# 2a
+lower = 2
+upper = 6
+b <- 0.15
+f <- function(x) ifelse(x > 2 & x < 6, 0.025*x + b, 0)
+probden <- integrate(f, lower = 2, upper = 6)$val
+
+y <- 0.1
+if (abs(probden - 1) < y) {
+  cat("This function is a genuine probability density given that b =", b)
+} else{
+  cat("This function is not a genuine probability density.")
+}
+
+# 2b
+probexceed_3 <- integrate(f, lower = 3, upper = 6)$val
+cat("Probability that measurement exceeds 3 is =", round(probexceed_3, 2))
+
+# 2c
+E_X <- integrate(function(x) x * f(x), lower = 2, upper = 6)$val
+cat("Expected value of X =", round(E_X, 2))
+
+# 3
+lowerlim <- -pi
+upperlim <- pi
+
+pdf <- function(x) {
+  ifelse(abs(x) <= pi, 1/(2*pi), 0)
+}
+
+prob_1 <- integrate(pdf, lower = lowerlim, upper = 0)$val
+prob_1
+# P(X) <= 0 = 0.5
+
+prob_2 <- integrate(pdf, lower = lowerlim, upper = pi/2)$val
+prob_2
+# P(X) <= pi/2 = 0.75
+
+
