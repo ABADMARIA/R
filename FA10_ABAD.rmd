@@ -1,0 +1,78 @@
+---
+title: "FA10_Abad"
+output: html_document
+date: "2023-05-07"
+---
+
+
+2.) Prove that the mean and variance of a binomially distributed random variable are, respectively u = np and variance = npq
+
+E(X) = ∑x P(X = x)
+
+P(X = x) = (n choose x) p^x (1-p)^(n-x)
+
+E(X) = ∑x (n choose x) p^x (1-p)^(n-x)
+
+(p + q)^n = ∑x (n choose x) p^x q^(n-x)
+
+n(p + q)^(n-1) = ∑x (n choose x) x p^(x-1) q^(n-x)
+
+np(p + q)^(n-1) = ∑x (n choose x) x p^x q^(n-x)
+
+np = ∑x (n choose x) x p^x q^(n-x)
+
+E(X) = ∑x P(X = x) = np
+
+End of proof
+
+
+
+Var(X) = E(X^2) - (E(X))^2
+
+
+E(X^2) = ∑x x^2 P(X = x)
+
+E(X^2) = ∑x x^2 (n choose x) p^x (1-p)^(n-x)
+
+E(X^2) = ∑x x(x-1) (n choose x) p^x (1-p)^(n-x) + ∑x x (n choose x) p^x (1-p)^(n-x)
+
+∑x x(x-1) (n choose x) p^x (1-p)^(n-x) = n(n-1)p^2 ∑x (n-2 choose x-2) p^(x-2) (1-p)^(n-x)
+
+∑x (n-2 choose x-2) p^(x-2) (1-p)^(n-x) = (p + q)^(n-2) = 1
+
+∑x x(x-1) (n choose x) p^x (1-p)^(n-x) = n(n-1)p^2
+
+∑x x (n choose x) p^x (1-p)^(n-x) = np
+
+E(X^2) = np + n(n-1)p^2
+
+Var(X) = E(X^2) - (E(X))^2
+
+Var(X) = np + n(n-1)p^2 - (np)^2
+
+Var(X) = np(1-p)
+
+Var(X) = npq
+
+End of proof
+
+
+3.) Establish the validity of the Poisson approximation to the binomial distribution
+
+P(X = k) = (n choose k) p^k (1-p)^(n-k)
+
+P(X = k) = n! / (k!(n-k)!) * p^k * (1-p)^(n-k)
+
+P(X = k) ≈ √(2πn) / (√(2πk) * √(2π(n-k))) * (n/e)^n * (1/e)^(n-k) * p^k * (1-p)^(n-k)
+
+P(Y = k) = e^(-λ) * λ^k / k!
+
+P(Y = k) = e^(-np) * (np)^k / k!
+
+P(X = k) ≈ √(2πn) / (√(2πk) * √(2π(n-k))) * (n/e)^n * p^k * (1-p)^(n-k)
+
+P(X = k) ≈ √(2πn) / (√(2πk) * √(2π(n-k))) * (np)^k * e^(-np)
+
+P(X = k) ≈ e^(-np) * (np)^k / k!
+
+End of proof
