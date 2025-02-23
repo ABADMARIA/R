@@ -1,0 +1,187 @@
+---
+title: "Major League Baseball Payroll and Wins Analysis"
+author: "Maria Elizabeth Abad"
+date: "February 19, 2025"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggrepel)
+library(kableExtra)
+library(cowplot)
+```
+
+# 1. Wrangle
+
+## 1.1 Import the Data
+```{r import-data}
+load("C:/Users/Elize/Documents/YR3 2nd sem/DATA MINING/ml_pay.rdata")
+ls()
+
+mlb_raw <- as_tibble(ml_pay)
+load("C:/Users/Elize/Documents/YR3 2nd sem/DATA MINING/ml_pay.rdata")
+ls()
+
+mlb_raw <- as_tibble(ml_pay)  # Adjust object name if needed
+head(mlb_raw)
+
+cat("Rows:", nrow(mlb_raw), "Columns:", ncol(mlb_raw))
+```
+
+**Answer:** This matches up with the data description given.
+
+## 1.2 Tidying the Data (with pct_wins calculation)
+```{r tidy-data}
+mlb_yearly <- mlb_raw %>%
+  pivot_longer(cols = -c(Team.name.2014, payroll, avgwin),
+               names_to = "column_name",
+               values_to = "value") %>%
+  separate(column_name, into = c("prefix", "year", "suffix"), sep = "(?<=\\D)(?=\\d)", fill = "right") %>%
+  mutate(tidy_col_name = case_when(
+    prefix == "p" ~ "payroll",         
+    TRUE ~ "num_wins"                 
+  )) %>%
+  select(Team.name.2014, year, tidy_col_name, value) %>%
+  pivot_wider(names_from = tidy_col_name, values_from = value) %>%
+  rename(team = Team.name.2014) %>%
+  mutate(pct_wins = (num_wins / 162) * 100)
+
+head(mlb_yearly)
+```
+
+**Answer:** `mlb_aggregate` contains 30 rows (one per team). `mlb_yearly` contains 510 rows (17 years for each team).
+
+## 1.3 Calculate Aggregate Data
+```{r create-mlb-aggregate}
+mlb_aggregate <- mlb_yearly %>%
+  group_by(team) %>%
+  summarise(
+    payroll_aggregate = sum(payroll, na.rm = TRUE),
+    pct_wins_aggregate = mean(pct_wins, na.rm = TRUE)
+  )
+
+head(mlb_aggregate)
+```
+
+## Quality Control
+```{r quality-control}
+mlb_aggregate_computed <- mlb_yearly %>%
+  group_by(team) %>%
+  summarise(
+    payroll_aggregate_computed = sum(payroll, na.rm = TRUE),
+    pct_wins_aggregate_computed = mean(pct_wins, na.rm = TRUE)
+  )
+
+mlb_aggregate_joined <- mlb_aggregate %>%
+  left_join(mlb_aggregate_computed, by = "team")
+
+print(mlb_aggregate_joined)
+
+p1 <- ggplot(mlb_aggregate_joined, aes(x = payroll_aggregate, y = payroll_aggregate_computed)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  ggtitle("Payroll Aggregate: Provided vs. Computed") +
+  xlab("Provided Payroll Aggregate") +
+  ylab("Computed Payroll Aggregate")
+
+p2 <- ggplot(mlb_aggregate_joined, aes(x = pct_wins_aggregate, y = pct_wins_aggregate_computed)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  ggtitle("Win Percentage: Provided vs. Computed") +
+  xlab("Provided Win Percentage Aggregate") +
+  ylab("Computed Win Percentage Aggregate")
+
+library(cowplot)
+plot_grid(p1, p2)
+```
+
+# 2. Explore
+
+## 2.1 Payroll Across Years
+```{r payroll-across-years}
+mean_payrolls <- mlb_yearly %>%
+  group_by(team) %>%
+  summarise(mean_payroll = mean(payroll, na.rm = TRUE))
+
+ggplot(mlb_yearly, aes(x = as.numeric(year), y = payroll)) +
+  geom_line() +
+  facet_wrap(~ team) +
+  geom_hline(data = mean_payrolls, aes(yintercept = mean_payroll), color = "red", linetype = "dashed") +
+  ggtitle("Payroll Across Years by Team") +
+  xlab("Year") +
+  ylab("Payroll (in millions)")
+
+# Identify the three teams with the greatest payroll_aggregate_computed
+top_payroll_teams <- mlb_aggregate_computed %>%
+  arrange(desc(payroll_aggregate_computed)) %>%
+  head(3)
+
+print(top_payroll_teams)
+
+payroll_wide <- mlb_yearly %>%
+  select(team, year, payroll) %>%
+  pivot_wider(names_from = year, values_from = payroll, names_prefix = "payroll_")
+
+payroll_increase <- payroll_wide %>%
+  mutate(pct_increase = ((payroll_2014 - payroll_1998) / payroll_1998) * 100) %>%
+  arrange(desc(pct_increase)) %>%
+  select(team, payroll_1998, payroll_2014, pct_increase)
+
+top_pct_increase_teams <- payroll_increase %>% head(3)
+print(top_pct_increase_teams)
+```
+
+## 2.2 Win Percentage Across Years
+```{r win-percentage-years}
+mean_pct_wins <- mlb_yearly %>%
+  group_by(team) %>%
+  summarise(mean_pct_wins = mean(pct_wins, na.rm = TRUE))
+
+ggplot(mlb_yearly, aes(x = as.numeric(year), y = pct_wins)) +
+  geom_line() +
+  facet_wrap(~ team) +
+  geom_hline(data = mean_pct_wins, aes(yintercept = mean_pct_wins), color = "red", linetype = "dashed") +
+  ggtitle("Win Percentage Across Years by Team") +
+  xlab("Year") +
+  ylab("Win Percentage (%)")
+
+top_pct_wins_teams <- mlb_aggregate_computed %>%
+  arrange(desc(pct_wins_aggregate_computed)) %>%
+  head(3)
+
+print(top_pct_wins_teams)
+
+pct_wins_sd <- mlb_yearly %>%
+  group_by(team) %>%
+  summarise(pct_wins_sd = sd(pct_wins, na.rm = TRUE)) %>%
+  arrange(desc(pct_wins_sd))
+
+top_erratic_teams <- pct_wins_sd %>% head(3)
+print(top_erratic_teams)
+```
+
+## 2.3 Win Percentage versus Payroll
+```{r win-percentage-payroll}
+ggplot(mlb_aggregate_computed, aes(x = payroll_aggregate_computed, y = pct_wins_aggregate_computed)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  geom_text_repel(aes(label = team), size = 3) +
+  ggtitle("Win Percentage vs. Payroll (Aggregated)") +
+  xlab("Payroll Aggregate (in millions)") +
+  ylab("Win Percentage Aggregate (%)")
+```
+
+## 2.4 Team Efficiency
+```{r team-efficiency}
+mlb_aggregate_computed <- mlb_aggregate_computed %>%
+  mutate(efficiency = pct_wins_aggregate_computed / payroll_aggregate_computed)
+
+top_efficient_teams <- mlb_aggregate_computed %>%
+  arrange(desc(efficiency)) %>%
+  select(team, efficiency, pct_wins_aggregate_computed, payroll_aggregate_computed) %>%
+  head(3)
+
+print(top_efficient_teams)
+```
