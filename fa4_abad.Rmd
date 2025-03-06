@@ -1,0 +1,112 @@
+---
+title: "KNN and bias variance"
+author: "Maria Elizabeth B. Abad"
+date: "2025-03-06"
+output: pdf_document
+---
+## A Simple Rule to Predict This Season's Yield
+
+### 1: Training Error
+The training error for the simple prediction rule (using last year’s yield as the prediction) is:
+\[
+\text{Training Error} = \mathbb{E}[(Y - \hat{Y})^2 | X]
+\]
+Since we are predicting each tree’s yield using the exact same value from the previous year, the only error introduced comes from the noise term \( \epsilon \), which has variance \( \sigma^2 = 16 \). Thus, the training error is:
+\[
+\mathbb{E}[ (Y - Y)^2] = \mathbb{E}[\epsilon^2] = 16.
+\]
+
+### 2: Bias, Variance, and Test Error
+- **Mean Squared Bias:** The prediction rule directly uses last year’s yield, meaning there is no systematic deviation from the true function \( f(E) \). Thus, the bias is 0.
+- **Mean Variance:** The variance of our estimator is given by the variance of \( \epsilon \), which is \( \sigma^2 = 16 \).
+- **Expected Test Error:**
+Using the bias-variance decomposition:
+\[
+\mathbb{E}[(Y - \hat{Y})^2] = (\text{Bias})^2 + \text{Variance} + \sigma^2
+\]
+Since bias = 0, variance = 16, and the irreducible error \( \sigma^2 \) is also 16:
+\[
+\text{Test Error} = 16 + 16 = 32.
+\]
+
+### 3: Why is this not the best possible prediction rule?
+This rule does not account for underlying trends in the orchard. If the yield follows a spatial pattern, using only last year’s yield ignores valuable information from neighboring trees and systematic yield variations.
+
+## K-Nearest Neighbors Regression (Conceptual)
+
+### 1: Model Complexity and K
+As K increases, the model complexity decreases because the predictions become smoother by averaging over more neighboring trees. This reduces variance but increases bias.
+
+### 2: Degrees of Freedom
+The degrees of freedom for KNN is often considered \( n/K \) because if the data naturally clusters into groups of size K, then each group effectively acts as a single independent data point.
+
+### 3: How Increasing K Improves the Model
+Increasing K helps smooth out noise, reducing variance and leading to more stable predictions. This is beneficial in high-variance situations where the model overfits the training data.
+
+### 4: How Increasing K Can Worsen the Model
+If K becomes too large, the model starts to ignore local structure and averages over too many different data points, leading to high bias. This results in underfitting, where the model fails to capture meaningful patterns in the data
+
+## K-Nearest Neighbors Regression (Simulation)
+
+```r
+library(tidyverse)
+training_results_summary <- readRDS("C:/Users/Elize/Documents/YR3 2nd sem/DATA MINING/training_results_summary.rds")
+
+overall_results <- training_results_summary %>%
+  group_by(K) %>%
+  summarize(
+    mean_sq_bias = mean(bias^2),
+    mean_variance = mean(variance),
+    expected_test_error = mean_sq_bias + mean_variance
+  )
+
+overall_results %>%
+  pivot_longer(cols = c(mean_sq_bias, mean_variance, expected_test_error), 
+               names_to = "metric", values_to = "value") %>%
+  ggplot(aes(x = K, y = value, color = metric)) +
+  geom_line(size = 1) +
+  labs(title = "Bias-Variance Tradeoff in KNN", x = "K", y = "Error", color = "Metric") +
+  theme_minimal()
+
+overall_results %>%
+  ggplot(aes(x = K, y = mean_sq_bias)) +
+  geom_line(color = "red", size = 1) +
+  geom_point() +
+  labs(title = "Mean Squared Bias vs. K", x = "K", y = "Mean Squared Bias") +
+  theme_minimal()
+
+highest_bias <- training_results_summary %>%
+  arrange(desc(abs(bias))) %>%
+  slice(1)
+print(highest_bias)
+
+overall_results %>%
+  mutate(df = n()/K) %>%
+  ggplot(aes(x = df, y = mean_variance)) +
+  geom_line(color = "blue", size = 1) +
+  geom_point() +
+  labs(title = "Variance vs. Degrees of Freedom (n/K)", x = "n/K", y = "Variance") +
+  theme_minimal()
+
+variance_formula <- function(K, sigma2) {
+  return(sigma2 / K)
+}
+
+overall_results <- overall_results %>%
+  mutate(theoretical_variance = variance_formula(K, mean(training_results_summary$variance)))
+
+overall_results %>%
+  ggplot(aes(x = K)) +
+  geom_line(aes(y = mean_variance, color = "Empirical Variance"), size = 1) +
+  geom_line(aes(y = theoretical_variance, color = "Theoretical Variance"), linetype = "dashed", size = 1) +
+  labs(title = "Empirical vs Theoretical Variance", x = "K", y = "Variance", color = "Legend") +
+  theme_minimal()
+```
+
+### Summary of Findings
+1. **Optimal Value of \( K \)**: The optimal \( K \) is the value where the test error is minimized. Too small \( K \) leads to high variance, and too large \( K \) leads to high bias.
+2. **Reversed Trend**: If the data has strong spatial correlations, small \( K \) might still capture structured noise, while large \( K \) smooths it out too much, reversing the expected trend.
+3. **Bias Bump at Small \( K \)**: The bump occurs due to the rectangular grid configuration of trees, where the closest neighbors introduce structured bias.
+4. **Highest Bias Tree and \( K \)**: The tree and \( K \) with the highest absolute bias show a pattern due to local variations in yield.
+5. **Variance vs. Degrees of Freedom**: As \( df = n/K \) increases, variance decreases, confirming the theoretical expectations.
+6. **Empirical vs. Theoretical Variance**: The two variance curves match closely, validating our theoretical derivation.

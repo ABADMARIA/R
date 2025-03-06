@@ -1,0 +1,147 @@
+---
+title: "bone mineral density"
+author: "maria abad"
+date: "2025-03-05"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load Necessary Libraries
+```{r}
+library(tidyverse)
+library(readxl)
+library(cowplot)
+library(splines)
+library(numDeriv)
+library(caret)
+```
+
+## Import and Tidy Data
+```{r}
+bmd_raw <- read_excel("C:/Users/Elize/Documents/YR3 2nd sem/DATA MINING/bmd-data.xlsx")
+
+bmd <- bmd_raw %>%
+  rename(gender = sex) %>%
+  mutate(
+    gender = as.factor(gender),
+    fracture = as.factor(fracture),
+    medication = as.factor(medication)
+  )
+```
+
+### Comment on Data Layout and Tidiness
+The dataset contains variables such as `idnum`, `age`, `gender`, `spnbmd` (spinal bone mineral density), and other physiological indicators. The data is already structured in a tidy format where each row represents an individual and each column represents a single variable. To ensure proper analysis:
+- Renamed `sex` to `gender` for clarity.
+- Converted categorical variables (`gender`, `fracture`, `medication`) into factors.
+- The key variables of interest for modeling are `age` and `spnbmd`, with gender as a grouping factor.
+
+## Summary Statistics
+```{r}
+summary_stats <- bmd %>%
+  group_by(gender) %>%
+  summarize(
+    count = n(),
+    median_age = median(age, na.rm = TRUE)
+  )
+summary_stats
+```
+
+## Boxplots
+```{r}
+p1 <- ggplot(bmd, aes(x = gender, y = spnbmd)) +
+  geom_boxplot() + ggtitle("Distribution of spnbmd by Gender")
+
+p2 <- ggplot(bmd, aes(x = gender, y = age)) +
+  geom_boxplot() + ggtitle("Distribution of Age by Gender")
+
+plot_grid(p1, p2)
+```
+
+### Observations on Differences Between Groups
+From the boxplots:
+- The distribution of `spnbmd` appears different for males and females, indicating potential gender-related trends in bone mineral density.
+- The age distribution also varies between genders, which may impact growth trends in `spnbmd`.
+
+## Split Data into Training and Testing Sets
+```{r}
+set.seed(5) 
+n <- nrow(bmd)
+train_samples <- sample(1:n, round(0.8 * n))
+
+bmd_train <- bmd[train_samples, ]
+bmd_test <- bmd[-train_samples, ]
+```
+
+## Cross-validation for Optimal Degrees of Freedom
+```{r}
+cross_validate_spline <- function(df_train, x_var, y_var, df_range = 1:15, k = 10) {
+  set.seed(5)
+  folds <- createFolds(df_train[[y_var]], k = k, list = TRUE)
+  
+  cv_results <- data.frame(df = df_range, cv_error = rep(NA, length(df_range)))
+  
+  for (df in df_range) {
+    errors <- c()
+    
+    for (fold in folds) {
+      train_set <- df_train[-fold, ]
+      test_set <- df_train[fold, ]
+      
+      model <- lm(as.formula(paste(y_var, "~ ns(", x_var, ", df =", df, ")")), data = train_set)
+      preds <- predict(model, newdata = test_set)
+      errors <- c(errors, mean((test_set[[y_var]] - preds)^2))
+    }
+    
+    cv_results$cv_error[df_range == df] <- mean(errors)
+  }
+  
+  return(cv_results)
+}
+
+cv_male <- cross_validate_spline(bmd_train %>% filter(gender == "M"), "age", "spnbmd")
+cv_female <- cross_validate_spline(bmd_train %>% filter(gender == "F"), "age", "spnbmd")
+
+df.min <- max(cv_male$df[which.min(cv_male$cv_error)], cv_female$df[which.min(cv_female$cv_error)])
+df.1se <- max(cv_male$df[which(cv_male$cv_error <= min(cv_male$cv_error) + sd(cv_male$cv_error))],
+              cv_female$df[which(cv_female$cv_error <= min(cv_female$cv_error) + sd(cv_female$cv_error))])
+
+df.min
+df.1se
+```
+
+### Interpretation of Cross-Validation Results
+- **df.min** is the degree of freedom that minimizes CV error.
+- **df.1se** is chosen based on the one-standard-error rule.
+- **Which is better?** If df.min is too complex, df.1se provides a simpler model with similar performance.
+
+## Fit Final Spline Models
+```{r}
+spline_model_male <- lm(spnbmd ~ ns(age, df = df.min), data = bmd_train %>% filter(gender == "M"))
+spline_model_female <- lm(spnbmd ~ ns(age, df = df.min), data = bmd_train %>% filter(gender == "F"))
+```
+
+## Compute RMSE and Analyze Overfitting
+```{r}
+compute_rmse <- function(actual, predicted) {
+  sqrt(mean((actual - predicted)^2))
+}
+
+train_rmse_male <- compute_rmse(bmd_train %>% filter(gender == "M") %>% pull(spnbmd), predict(spline_model_male))
+train_rmse_female <- compute_rmse(bmd_train %>% filter(gender == "F") %>% pull(spnbmd), predict(spline_model_female))
+
+test_rmse_male <- compute_rmse(bmd_test %>% filter(gender == "M") %>% pull(spnbmd), predict(spline_model_male, newdata = bmd_test %>% filter(gender == "M")))
+test_rmse_female <- compute_rmse(bmd_test %>% filter(gender == "F") %>% pull(spnbmd), predict(spline_model_female, newdata = bmd_test %>% filter(gender == "F")))
+
+rmse_table <- tibble(
+  Gender = c("Male", "Female"),
+  Training_RMSE = c(train_rmse_male, train_rmse_female),
+  Test_RMSE = c(test_rmse_male, test_rmse_female)
+)
+rmse_table
+```
+
+### Conclusion on Overfitting
+- If test RMSE is much higher than training RMSE, the model may be overfitting. If they are close, the model generalizes well.
